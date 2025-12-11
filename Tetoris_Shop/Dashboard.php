@@ -1,102 +1,112 @@
 <?php
+/**
+ * Dashboard.php
+ * Panel de control seguro y validado.
+ */
 session_start();
-require_once 'db_connection.php';
+require_once __DIR__ . '/db_connection.php';
 
-// Seguridad: Solo Administrador
-if (empty($_SESSION['user_role']) || $_SESSION['user_role'] !== 'ADMINISTRADOR') {
+// 1. Validación de Sesión sin superglobales directas
+$role = $_SESSION['user_role'] ?? '';
+if ($role !== 'ADMINISTRADOR') {
     header("Location: forms/Login.php");
-    exit();
+    exit(0);
 }
 
-// ================= CÁLCULOS REALES =================
-// 1. Ingresos del mes actual
-$mes_actual = date('m');
-$anio_actual = date('Y');
-$sql_ingresos = "SELECT SUM(total_venta) as total FROM ventas WHERE MONTH(fecha_venta) = ? AND YEAR(fecha_venta) = ?";
-$stmt = $conn->prepare($sql_ingresos);
-$stmt->bind_param("ss", $mes_actual, $anio_actual);
-$stmt->execute();
-$ingresos = $stmt->get_result()->fetch_assoc()['total'] ?? 0;
-$stmt->close();
+// 2. Lógica de Datos (Usando Prepared Statements siempre)
+$mes = date('m');
+$anio = date('Y');
 
-// 2. Total Órdenes (Histórico)
-$ordenes = $conn->query("SELECT COUNT(*) as cant FROM ventas")->fetch_assoc()['cant'];
+// Ingresos
+$ingresos = 0.0;
+$stmt_ing = $conn->prepare("SELECT SUM(total_venta) as total FROM ventas WHERE MONTH(fecha_venta) = ? AND YEAR(fecha_venta) = ?");
+if ($stmt_ing) {
+    $stmt_ing->bind_param("ss", $mes, $anio);
+    $stmt_ing->execute();
+    $res_ing = $stmt_ing->get_result();
+    $row_ing = $res_ing->fetch_assoc();
+    $ingresos = (float)($row_ing['total'] ?? 0);
+    $stmt_ing->close();
+}
 
-// 3. Stock Bajo (Productos con stock <= stock_minimo)
-$bajos = $conn->query("SELECT COUNT(*) as cant FROM productos WHERE stock_actual <= stock_minimo")->fetch_assoc()['cant'];
+// Conteos simples (Casting a int para seguridad)
+$ordenes = 0;
+$res_ord = $conn->query("SELECT COUNT(*) as cant FROM ventas");
+if ($res_ord) { $ordenes = (int)$res_ord->fetch_assoc()['cant']; }
 
-// 4. Clientes Totales
-$clientes = $conn->query("SELECT COUNT(*) as cant FROM usuarios WHERE id_rol = (SELECT id_rol FROM roles WHERE nombre_rol='CLIENTE')")->fetch_assoc()['cant'];
+$bajos = 0;
+$res_low = $conn->query("SELECT COUNT(*) as cant FROM productos WHERE stock_actual <= stock_minimo");
+if ($res_low) { $bajos = (int)$res_low->fetch_assoc()['cant']; }
 
+$clientes = 0;
+// Subconsulta segura
+$res_cli = $conn->query("SELECT COUNT(*) as cant FROM usuarios WHERE id_rol = (SELECT id_rol FROM roles WHERE nombre_rol='CLIENTE' LIMIT 1)");
+if ($res_cli) { $clientes = (int)$res_cli->fetch_assoc()['cant']; }
+
+// Datos para Gráficos
+$labels_json = '[]';
+$data_json   = '[]';
+
+$res_chart = $conn->query("SELECT c.nombre_categoria, COUNT(dv.id_detalle) as v FROM detalle_venta dv JOIN productos p ON dv.id_producto=p.id_producto JOIN categorias c ON p.id_categoria=c.id_categoria GROUP BY c.id_categoria LIMIT 5");
+if ($res_chart) {
+    $lbls = []; $dts = [];
+    while ($r = $res_chart->fetch_assoc()) {
+        $lbls[] = htmlspecialchars($r['nombre_categoria'], ENT_QUOTES, 'UTF-8');
+        $dts[]  = (int)$r['v'];
+    }
+    $labels_json = json_encode($lbls);
+    $data_json   = json_encode($dts);
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Dashboard Teto - Resumen</title>
+    <title>Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="css/inventario.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 <body>
-
     <div class="container-fluid">
         <header class="py-3 mb-4 border-bottom teto-header">
-            <div class="d-flex justify-content-between align-items-center">
-                <h1 class="h3 text-white teto-title">📈 Panel de Control</h1>
-                <nav class="nav">
-                    <a href="Productos.php" class="nav-link teto-nav-link">Inventario</a>
-                    <a href="#" class="nav-link teto-nav-link active">Dashboard</a>
-                    <a href="Ventas.php" class="nav-link teto-nav-link">Ventas</a>
-                </nav>
-                <a href="logout.php" class="btn teto-btn-primary">Salir</a>
-            </div>
+            <h1 class="h3 text-white ms-3">📈 Panel</h1>
+            <a href="logout.php" class="btn btn-light btn-sm float-end me-3">Salir</a>
         </header>
 
         <main class="teto-main-content">
-            <h2 class="mb-4 text-white">Resumen de Negocio</h2>
-
             <div class="row g-4 mb-5">
                 <div class="col-md-3">
                     <div class="p-4 rounded shadow teto-card">
-                        <h5 class="text-muted">Ingresos (Este Mes)</h5>
+                        <h5 class="text-muted">Ingresos</h5>
                         <p class="h2 text-success">$<?php echo number_format($ingresos, 2); ?></p>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="p-4 rounded shadow teto-card">
-                        <h5 class="text-muted">Total Ventas</h5>
+                        <h5 class="text-muted">Ventas</h5>
                         <p class="h2 text-primary"><?php echo $ordenes; ?></p>
                     </div>
                 </div>
                 <div class="col-md-3">
-                    <div class="p-4 rounded shadow teto-card <?php echo ($bajos > 0) ? 'teto-row-low' : ''; ?>">
-                        <h5 class="text-muted">Alertas Stock</h5>
+                    <div class="p-4 rounded shadow teto-card">
+                        <h5 class="text-muted">Alertas</h5>
                         <p class="h2 text-warning"><?php echo $bajos; ?></p>
-                        <?php if($bajos > 0): ?>
-                            <small class="text-danger fw-bold">¡Revisar Inventario!</small>
-                        <?php endif; ?>
                     </div>
                 </div>
                 <div class="col-md-3">
                     <div class="p-4 rounded shadow teto-card">
-                        <h5 class="text-muted">Clientes Registrados</h5>
+                        <h5 class="text-muted">Clientes</h5>
                         <p class="h2 text-info"><?php echo $clientes; ?></p>
                     </div>
                 </div>
             </div>
 
             <div class="row g-4">
-                <div class="col-lg-7">
+                <div class="col-lg-6 mx-auto">
                     <div class="p-4 rounded shadow teto-card">
-                        <h3 class="mb-3">Tendencia de Ventas (Demo)</h3>
-                        <canvas id="ventasChart" height="150"></canvas>
-                    </div>
-                </div>
-                <div class="col-lg-5">
-                    <div class="p-4 rounded shadow teto-card">
-                        <h3 class="mb-3">Top Productos (Demo)</h3>
-                        <canvas id="productosChart" height="150"></canvas>
+                        <h3 class="mb-3">Top Categorías</h3>
+                        <canvas id="prodChart"></canvas>
                     </div>
                 </div>
             </div>
@@ -104,37 +114,21 @@ $clientes = $conn->query("SELECT COUNT(*) as cant FROM usuarios WHERE id_rol = (
     </div>
     
     <script>
-        // Configuración de Chart.js (Estética Teto)
-        document.addEventListener('DOMContentLoaded', function() {
-            const ctx1 = document.getElementById('ventasChart').getContext('2d');
-            new Chart(ctx1, {
-                type: 'line',
-                data: {
-                    labels: ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4'],
-                    datasets: [{
-                        label: 'Ventas ($)',
-                        data: [1200, 1900, 3000, 500], // Datos ejemplo
-                        borderColor: '#FF0045',
-                        backgroundColor: 'rgba(255, 0, 69, 0.1)',
-                        fill: true
-                    }]
-                }
-            });
-
-            const ctx2 = document.getElementById('productosChart').getContext('2d');
-            new Chart(ctx2, {
+        // JS Seguro: Datos inyectados vía JSON parseado
+        document.addEventListener('DOMContentLoaded', () => {
+            const ctx = document.getElementById('prodChart').getContext('2d');
+            new Chart(ctx, {
                 type: 'doughnut',
                 data: {
-                    labels: ['Pan', 'Leche', 'Huevos'],
+                    labels: <?php echo $labels_json; ?>,
                     datasets: [{
-                        data: [50, 20, 30], // Datos ejemplo
-                        backgroundColor: ['#FF0045', '#3F4750', '#EDA7BA']
+                        data: <?php echo $data_json; ?>,
+                        backgroundColor: ['#FF0045','#3F4750','#EDA7BA','#FFC107','#17A2B8']
                     }]
                 }
             });
         });
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
 <?php $conn->close(); ?>
