@@ -1,142 +1,94 @@
 <?php
-session_start();
 /**
  * process_product.php
- * Script centralizado para manejar las operaciones CRUD (Crear, Modificar, Eliminar)
- * CORREGIDO para la estructura de la BD de Tetoris Shop.
+ * Backend seguro para CRUD de productos.
  */
-
-// 1. Incluir la conexión a la base de datos
+session_start();
 require_once 'db_connection.php';
 
-// OPCIONAL: Verificación de seguridad básica (se puede expandir con roles)
-if (!isset($_SESSION['user_id'])) {
-    // header("Location: forms/Login.php");
-    // exit();
-}
-
-
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
-    
-    // Capturar la acción para dirigir la lógica
-    $action = $_POST['action'] ?? '';
-
-    // ==========================================
-    // LÓGICA DE ELIMINACIÓN (DELETE)
-    // ==========================================
-    if ($action === 'delete') {
-        
-        // CORRECCIÓN: Usamos 'id_producto'
-        $producto_id = isset($_POST['id_producto']) ? intval($_POST['id_producto']) : 0; 
-        
-        if ($producto_id > 0) {
-            
-            // CORRECCIÓN: La columna de la clave primaria es 'id_producto'
-            $sql = "DELETE FROM productos WHERE id_producto = ?";
-            $stmt = $conn->prepare($sql);
-            $stmt->bind_param("i", $producto_id); 
-
-            if ($stmt->execute()) {
-                header("Location: productos.php?success=producto_eliminado");
-                exit();
-            } else {
-                error_log("Error al eliminar el producto: " . $stmt->error);
-                header("Location: productos.php?error=error_eliminacion");
-                exit();
-            }
-            $stmt->close();
-        } else {
-             header("Location: productos.php?error=id_invalido");
-             exit();
-        }
-        
-    } 
-    
-    // ==========================================
-    // LÓGICA DE CREACIÓN (CREATE) y MODIFICACIÓN (UPDATE)
-    // ==========================================
-    elseif ($action === 'create' || $action === 'update') {
-        
-        // 2. Capturar y sanear los datos (AJUSTADOS A LA NUEVA BD)
-        $nombre_producto = $conn->real_escape_string($_POST['nombre_producto'] ?? '');
-        $id_categoria    = intval($_POST['id_categoria'] ?? 0);      // NUEVO CAMPO
-        $precio_venta    = floatval($_POST['precio_venta'] ?? 0.00); // Antes valor_unitario
-        $costo_compra    = floatval($_POST['costo_compra'] ?? 0.00);  // Antes valor_compra
-        $stock_actual    = intval($_POST['stock_actual'] ?? 0);      // Antes stock
-        $stock_minimo    = intval($_POST['stock_minimo'] ?? 10);     // NUEVO CAMPO
-        
-        // Validación básica
-        if (empty($nombre_producto) || $precio_venta <= 0 || $id_categoria <= 0) {
-             header("Location: productos.php?error=campos_requeridos_faltantes");
-             exit();
-        }
-
-        if ($action === 'create') {
-            // INSERT (CREATE)
-            $sql = "INSERT INTO productos 
-                    (nombre_producto, id_categoria, precio_venta, costo_compra, stock_actual, stock_minimo) 
-                    VALUES (?, ?, ?, ?, ?, ?)";
-                    
-            $stmt = $conn->prepare($sql);
-            // Tipos: string, integer, double, double, integer, integer (sidddi)
-            $stmt->bind_param("sidddi", $nombre_producto, $id_categoria, $precio_venta, $costo_compra, $stock_actual, $stock_minimo);
-
-            if ($stmt->execute()) {
-                header("Location: productos.php?success=producto_creado");
-                exit();
-            } else {
-                error_log("Error al crear el producto: " . $stmt->error);
-                header("Location: productos.php?error=error_creacion");
-                exit();
-            }
-            $stmt->close();
-            
-        } elseif ($action === 'update') {
-            // UPDATE
-            $producto_id = isset($_POST['id_producto']) ? intval($_POST['id_producto']) : 0; 
-            
-            if ($producto_id > 0) {
-                // CORRECCIÓN: Se incluyen todos los nuevos campos y la condición WHERE usa 'id_producto'
-                $sql = "UPDATE productos SET 
-                            nombre_producto = ?, 
-                            id_categoria = ?, 
-                            precio_venta = ?, 
-                            costo_compra = ?, 
-                            stock_actual = ?,
-                            stock_minimo = ?
-                        WHERE id_producto = ?";
-                
-                $stmt = $conn->prepare($sql);
-                // Tipos: string, integer, double, double, integer, integer, integer (sidddii)
-                $stmt->bind_param("sidddii", $nombre_producto, $id_categoria, $precio_venta, $costo_compra, $stock_actual, $stock_minimo, $producto_id);
-
-                if ($stmt->execute()) {
-                    header("Location: productos.php?success=producto_modificado");
-                    exit();
-                } else {
-                    error_log("Error al modificar el producto: " . $stmt->error);
-                    header("Location: productos.php?error=error_modificacion");
-                    exit();
-                }
-                $stmt->close();
-            } else {
-                header("Location: productos.php?error=id_invalido");
-                exit();
-            }
-        }
-    }
-    // ==========================================
-    // MANEJO DE ACCIÓN NO RECONOCIDA
-    // ==========================================
-    else {
-        header("Location: productos.php?error=accion_no_valida");
-        exit();
-    }
-} else {
-    // Si se accede sin POST
-    header("Location: productos.php?error=acceso_no_autorizado");
+// Seguridad: Solo admin/empleado
+if (empty($_SESSION['user_role']) || !in_array($_SESSION['user_role'], ['ADMINISTRADOR', 'EMPLEADO'])) {
+    header("Location: forms/Login.php");
     exit();
 }
 
+if ($_SERVER["REQUEST_METHOD"] == "POST") {
+    
+    // Capturar acción y sanitizar
+    $action = filter_input(INPUT_POST, 'action', FILTER_SANITIZE_STRING);
+
+    // ================= DELETE =================
+    if ($action === 'delete') {
+        $id = filter_input(INPUT_POST, 'id_producto', FILTER_VALIDATE_INT);
+        
+        if ($id) {
+            $stmt = $conn->prepare("DELETE FROM productos WHERE id_producto = ?");
+            $stmt->bind_param("i", $id);
+            if ($stmt->execute()) {
+                header("Location: Productos.php?msg=eliminado");
+            } else {
+                header("Location: Productos.php?error=db_error");
+            }
+            $stmt->close();
+        } else {
+            header("Location: Productos.php?error=id_invalido");
+        }
+        exit();
+    }
+
+    // ================= CREATE / UPDATE =================
+    if ($action === 'create' || $action === 'update') {
+        
+        // Validar inputs estrictamente
+        $nombre     = filter_input(INPUT_POST, 'nombre_producto', FILTER_SANITIZE_STRING);
+        $id_cat     = filter_input(INPUT_POST, 'id_categoria', FILTER_VALIDATE_INT);
+        $precio     = filter_input(INPUT_POST, 'precio_venta', FILTER_VALIDATE_FLOAT);
+        $costo      = filter_input(INPUT_POST, 'costo_compra', FILTER_VALIDATE_FLOAT);
+        $stock      = filter_input(INPUT_POST, 'stock_actual', FILTER_VALIDATE_INT);
+        $min_stock  = filter_input(INPUT_POST, 'stock_minimo', FILTER_VALIDATE_INT);
+
+        // Verificación básica
+        if (!$nombre || !$id_cat || $precio === false || $stock === false) {
+            header("Location: Producto_Formulario.php?error=campos_vacios");
+            exit();
+        }
+
+        if ($action === 'create') {
+            $sql = "INSERT INTO productos (nombre_producto, id_categoria, precio_venta, costo_compra, stock_actual, stock_minimo) VALUES (?, ?, ?, ?, ?, ?)";
+            $stmt = $conn->prepare($sql);
+            // Tipos: s (string), i (int), d (double/float)
+            $stmt->bind_param("sidddi", $nombre, $id_cat, $precio, $costo, $stock, $min_stock);
+            
+            if ($stmt->execute()) {
+                header("Location: Productos.php?msg=creado");
+            } else {
+                header("Location: Producto_Formulario.php?error=error_creacion");
+            }
+            $stmt->close();
+
+        } elseif ($action === 'update') {
+            $id = filter_input(INPUT_POST, 'id_producto', FILTER_VALIDATE_INT);
+            if (!$id) {
+                header("Location: Productos.php?error=id_invalido");
+                exit();
+            }
+
+            $sql = "UPDATE productos SET nombre_producto=?, id_categoria=?, precio_venta=?, costo_compra=?, stock_actual=?, stock_minimo=? WHERE id_producto=?";
+            $stmt = $conn->prepare($sql);
+            $stmt->bind_param("sidddii", $nombre, $id_cat, $precio, $costo, $stock, $min_stock, $id);
+
+            if ($stmt->execute()) {
+                header("Location: Productos.php?msg=actualizado");
+            } else {
+                header("Location: Producto_Formulario.php?error=error_actualizacion&id=".$id);
+            }
+            $stmt->close();
+        }
+    }
+} else {
+    // Si intentan entrar directo sin POST
+    header("Location: Productos.php");
+    exit();
+}
 $conn->close();
 ?>
