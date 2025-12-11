@@ -14,7 +14,7 @@ $dbname = "tetoris_shop";  // El nombre de tu base de datos SQL
 $conn = new mysqli($servername, $username, $password, $dbname);
 
 // 3. Verificar la Conexión
-if ($conn->connect_error) {
+if ($conn->connect_error === TRUE) {
     // Si hay un error, el script muere y muestra el error.
     die("❌ Error de Conexión a la Base de Datos: " . $conn->connect_error);
 }
