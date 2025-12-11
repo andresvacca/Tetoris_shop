@@ -1,0 +1,17 @@
+---
+engines:
+  csslint:
+    enabled: false
+  eslint:
+    enabled: false
+  duplication:
+    enabled: false
+
+exclude_paths:
+  - "Tetoris_Shop/css/**"
+  - "Tetoris_Shop/js/**"
+  - "**/*.css"
+  - "**/*.js"
+  - "**/*.min.js"
+  - "**/*.min.css"
+  - "**/*.html"
