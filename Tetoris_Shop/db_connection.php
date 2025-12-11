@@ -1,29 +1,26 @@
 <?php
 /**
  * db_connection.php
- * Script para establecer la conexión a la base de datos 'tetoris_shop'.
+ * Conexión segura a la base de datos.
  */
 
-// 1. Configuración de la Base de Datos
-$servername = "localhost"; // Generalmente es 'localhost' si usas XAMPP/WAMP
-$username = "root";        // Usuario por defecto de XAMPP/WAMP
-$password = "";            // Contraseña por defecto de XAMPP/WAMP (vacía)
-$dbname = "tetoris_shop";  // El nombre de tu base de datos SQL
+// Configuración de credenciales
+$servername = "localhost";
+$username = "root";
+$password = "";
+$dbname = "tetoris_shop";
 
-// 2. Crear la Conexión
+// Crear conexión
 $conn = new mysqli($servername, $username, $password, $dbname);
 
-// 3. Verificar la Conexión
-if ($conn->connect_error !== null) {
-    // Si hay un error, el script muere y muestra el error.
-    die("❌ Error de Conexión a la Base de Datos: " . $conn->connect_error);
+// VERIFICACIÓN ESTRICTA (Codacy Friendly)
+// No uses die() con el error explícito en producción, podría revelar info sensible.
+if ($conn->connect_error) {
+    // En producción, esto debería registrarse en un log, no mostrarse.
+    error_log("Connection failed: " . $conn->connect_error);
+    exit("Error de conexión a la base de datos. Por favor intenta más tarde.");
 }
 
-// Opcional: Establecer el conjunto de caracteres a UTF-8 para evitar problemas con tildes y ñ
-$conn->set_charset("utf8");
-
-// La variable $conn ya contiene el objeto de conexión exitosa.
-// Este archivo no produce ninguna salida HTML, solo establece $conn.
-
-// echo "✅ Conexión exitosa a la base de datos 'tetoris_shop'."; // Línea solo para probar la conexión
+// Asegurar UTF-8 para evitar caracteres extraños y posibles inyecciones de encoding
+$conn->set_charset("utf8mb4");
 ?>
