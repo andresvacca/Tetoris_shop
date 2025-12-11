@@ -1,0 +1,121 @@
+/* =========================================
+   Paleta de Colores de Kasane Teto
+   ========================================= */
+:root {
+    --teto-red: #8B0000;      /* Rojo oscuro/vino (Cabello/Seriedad) */
+    --teto-pink: #FF69B4;     /* Rosa brillante/magenta (Acento/Diversión) */
+    --teto-dark: #343a40;     /* Gris oscuro/negro (Uniforme/Base oscura) */
+    --teto-light: #f8f9fa;    /* Fondo claro (Base) */
+    
+    /* Colores Funcionales de Alerta */
+    --stock-ok: #D4EDDA;      /* Verde suave */
+    --stock-low: #FFFACD;     /* Amarillo cálido */
+    --stock-zero: #f8d7da;    /* Rojo claro de alerta */
+}
+
+/* =========================================
+   Estilos Generales y Tipografía
+   ========================================= */
+
+
+body {
+    background-color: var(--teto-dark);
+    color: var(--teto-dark);
+    font-family: 'Arial', sans-serif;
+}
+
+h1, h2, h3, h4 {
+    color: var(--teto-red);
+}
+
+/* =========================================
+   HEADER y NAVEGACIÓN (Estilo Uniforme Oscuro)
+   ========================================= */
+.teto-header {
+    background-color: var(--teto-dark);
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.15);
+}
+
+.teto-title {
+    color: var(--teto-pink) !important;
+    font-weight: 700;
+}
+
+.teto-nav-link {
+    color: var(--teto-light) !important;
+    font-weight: 500;
+    transition: all 0.2s ease-in-out;
+}
+
+.teto-nav-link:hover, .teto-nav-link.active {
+    color: var(--teto-pink) !important;
+    border-bottom: 3px solid var(--teto-pink);
+    padding-bottom: 0.2rem;
+}
+
+/* =========================================
+   BOTONES (Estilo Principal y Acciones)
+   ========================================= */
+
+/* Botón principal (Acceder / Guardar) - Rojo Vino */
+.teto-btn-primary {
+    background-color: var(--teto-red);
+    border-color: var(--teto-red);
+    color: white;
+    transition: background-color 0.2s;
+}
+
+.teto-btn-primary:hover {
+    background-color: #A52A2A; /* Ligeramente más claro al pasar el ratón */
+    border-color: #A52A2A;
+    color: white;
+}
+
+/* Botón secundario (Añadir / Exportar) - Rosa de Acento */
+.teto-btn-secondary {
+    background-color: var(--teto-pink);
+    border-color: var(--teto-pink);
+    color: var(--teto-dark); /* Texto oscuro para contraste */
+    font-weight: 600;
+    transition: background-color 0.2s;
+}
+
+.teto-btn-secondary:hover {
+    background-color: #ff85c1; /* Ligeramente más claro */
+    border-color: #ff85c1;
+    color: var(--teto-dark);
+}
+
+/* =========================================
+   FORMULARIOS e INPUTS
+   ========================================= */
+.teto-input:focus {
+    border-color: var(--teto-pink);
+    box-shadow: 0 0 0 0.25rem rgba(255, 105, 180, 0.25); /* Sombra rosa */
+}
+
+/* =========================================
+   TARJETAS y SECCIONES (Cards)
+   ========================================= */
+.teto-card {
+    border-color: var(--teto-red) !important;
+    background-color: white;
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.05);
+}
+
+/* =========================================
+   FOOTER
+   ========================================= */
+.teto-footer {
+    background-color: var(--teto-dark);
+    color: var(--teto-light) !important;
+    border-color: var(--teto-red) !important;
+}
+
+.teto-footer p {
+    color: var(--teto-light) !important;
+}
+
+.teto-footer a {
+    color: var(--teto-pink) !important;
+}
