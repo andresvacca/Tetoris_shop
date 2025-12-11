@@ -1,72 +1,101 @@
 <?php
+/**
+ * Ventas.php
+ * Reporte seguro: Inputs GET filtrados y Salida escapada.
+ */
 session_start();
-require_once 'db_connection.php'; 
+require_once __DIR__ . '/db_connection.php'; 
 
-// Seguridad de roles
-if (empty($_SESSION['user_role']) || !in_array($_SESSION['user_role'], ['ADMINISTRADOR', 'EMPLEADO'])) {
+// 1. Seguridad de Sesión
+$role = $_SESSION['user_role'] ?? '';
+$allowed = ['ADMINISTRADOR', 'EMPLEADO'];
+if (!in_array($role, $allowed, true)) {
     header("Location: forms/Login.php");
-    exit();
+    exit(0);
 }
 
-// Validación de inputs GET (Codacy odia acceder directamente a $_GET sin verificar)
-$fecha_inicio = filter_input(INPUT_GET, 'inicio', FILTER_SANITIZE_STRING) ?? date('Y-m-01');
-$fecha_fin    = filter_input(INPUT_GET, 'fin', FILTER_SANITIZE_STRING) ?? date('Y-m-d');
-$fecha_fin_sql = $fecha_fin . ' 23:59:59';
+// 2. Inputs Seguros (GET)
+$f_inicio = filter_input(INPUT_GET, 'inicio', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: date('Y-m-01');
+$f_fin    = filter_input(INPUT_GET, 'fin', FILTER_SANITIZE_FULL_SPECIAL_CHARS) ?: date('Y-m-d');
+$f_fin_sql = $f_fin . ' 23:59:59';
+
 ?>
 <!DOCTYPE html>
 <html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Ventas</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="css/inventario.css"> 
+</head>
 <body>
     <div class="container-fluid">
+        <header class="py-3 mb-4 border-bottom teto-header">
+            <h1 class="h3 text-white ms-3">💸 Registro de Ventas</h1>
+            <a href="logout.php" class="btn btn-light btn-sm float-end me-3">Salir</a>
+        </header>
+
         <main class="teto-main-content">
-            <form method="GET" action="Ventas.php" class="row g-3 align-items-end mb-4">
-                <div class="col-md-3">
-                    <label class="form-label">Desde:</label>
-                    <input type="date" name="inicio" class="form-control" value="<?php echo htmlspecialchars($fecha_inicio, ENT_QUOTES, 'UTF-8'); ?>">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">Hasta:</label>
-                    <input type="date" name="fin" class="form-control" value="<?php echo htmlspecialchars($fecha_fin, ENT_QUOTES, 'UTF-8'); ?>">
-                </div>
-                <div class="col-md-3">
-                    <button type="submit" class="btn w-100 btn-primary">Filtrar</button>
-                </div>
-            </form>
+            <section class="mb-4 p-3 border rounded teto-card">
+                <form method="GET" action="Ventas.php" class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label">Desde:</label>
+                        <input type="date" name="inicio" class="form-control" value="<?php echo htmlspecialchars($f_inicio, ENT_QUOTES, 'UTF-8'); ?>">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label">Hasta:</label>
+                        <input type="date" name="fin" class="form-control" value="<?php echo htmlspecialchars($f_fin, ENT_QUOTES, 'UTF-8'); ?>">
+                    </div>
+                    <div class="col-md-3">
+                        <button type="submit" class="btn btn-primary w-100">Filtrar</button>
+                    </div>
+                </form>
+            </section>
 
             <section class="teto-card p-3 border rounded">
                 <div class="table-responsive">
                     <table class="table table-striped teto-table">
-                        <thead></thead>
+                        <thead>
+                            <tr>
+                                <th>ID</th><th>Fecha</th><th>Cliente</th><th>Total</th><th>Detalles</th>
+                            </tr>
+                        </thead>
                         <tbody>
                             <?php
-                            $sql = "SELECT v.id_venta, v.fecha_venta, v.total_venta, v.metodo_pago, u.nombre, u.apellido
-                                    FROM ventas v LEFT JOIN usuarios u ON v.id_usuario = u.id_usuario
-                                    WHERE v.fecha_venta BETWEEN ? AND ? ORDER BY v.fecha_venta DESC";
+                            $sql = "SELECT v.id_venta, v.fecha_venta, v.total_venta, u.nombre, u.apellido
+                                    FROM ventas v
+                                    LEFT JOIN usuarios u ON v.id_usuario = u.id_usuario
+                                    WHERE v.fecha_venta BETWEEN ? AND ?
+                                    ORDER BY v.fecha_venta DESC";
                             
                             $stmt = $conn->prepare($sql);
                             if ($stmt) {
-                                $stmt->bind_param("ss", $fecha_inicio, $fecha_fin_sql);
+                                $stmt->bind_param("ss", $f_inicio, $f_fin_sql);
                                 $stmt->execute();
-                                $result = $stmt->get_result();
+                                $res = $stmt->get_result();
                                 
-                                while ($row = $result->fetch_assoc()) {
-                                    // Escapado riguroso
-                                    $id_venta = htmlspecialchars((string)$row['id_venta'], ENT_QUOTES, 'UTF-8');
-                                    $fecha    = htmlspecialchars(date('d/m/Y H:i', strtotime($row['fecha_venta'])), ENT_QUOTES, 'UTF-8');
-                                    $total    = htmlspecialchars(number_format((float)$row['total_venta'], 2), ENT_QUOTES, 'UTF-8');
-                                    $metodo   = htmlspecialchars((string)$row['metodo_pago'], ENT_QUOTES, 'UTF-8');
-                                    
-                                    $nombre_completo = $row['nombre'] 
-                                        ? htmlspecialchars($row['nombre'] . ' ' . $row['apellido'], ENT_QUOTES, 'UTF-8') 
-                                        : 'Cliente Web';
+                                if ($res->num_rows > 0) {
+                                    while ($row = $res->fetch_assoc()) {
+                                        // SANITIZACIÓN TOTAL
+                                        $v_id    = htmlspecialchars((string)$row['id_venta'], ENT_QUOTES, 'UTF-8');
+                                        $v_fecha = htmlspecialchars(date('d/m/Y H:i', strtotime($row['fecha_venta'])), ENT_QUOTES, 'UTF-8');
+                                        $v_total = number_format((float)$row['total_venta'], 2);
+                                        
+                                        $nom_cli = $row['nombre'] 
+                                            ? htmlspecialchars($row['nombre'] . ' ' . $row['apellido'], ENT_QUOTES, 'UTF-8') 
+                                            : 'Anónimo';
 
-                                    echo "<tr>";
-                                    echo "<td>#" . $id_venta . "</td>";
-                                    echo "<td>" . $fecha . "</td>";
-                                    echo "<td>" . $nombre_completo . "</td>";
-                                    echo "<td>" . $metodo . "</td>";
-                                    echo "<td class='text-success'>$" . $total . "</td>";
-                                    echo "<td><button class='btn btn-sm teto-btn-action'>Ver</button></td>";
-                                    echo "</tr>";
+                                        echo "<tr>";
+                                        echo "<td>#$v_id</td>";
+                                        echo "<td>$v_fecha</td>";
+                                        echo "<td>$nom_cli</td>";
+                                        echo "<td class='text-success fw-bold'>$$v_total</td>";
+                                        echo "<td><button class='btn btn-sm teto-btn-action'>Ver</button></td>";
+                                        echo "</tr>";
+                                    }
+                                } else {
+                                    echo "<tr><td colspan='5' class='text-center'>Sin resultados.</td></tr>";
                                 }
                                 $stmt->close();
                             }
@@ -77,6 +106,7 @@ $fecha_fin_sql = $fecha_fin . ' 23:59:59';
             </section>
         </main>
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
 <?php $conn->close(); ?>

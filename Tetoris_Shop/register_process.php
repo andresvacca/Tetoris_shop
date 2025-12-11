@@ -1,69 +1,69 @@
 <?php
+/**
+ * register_process.php
+ * Registro blindado para Codacy.
+ */
 session_start();
-require_once 'db_connection.php'; 
+require_once __DIR__ . '/db_connection.php'; 
 
-// Rutas
-$register_page = 'forms/Register.php'; 
-$login_page = 'forms/Login.php'; 
+$request_method = filter_input(INPUT_SERVER, 'REQUEST_METHOD', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
 
-if ($_SERVER["REQUEST_METHOD"] == "POST") {
+if ($request_method === 'POST') {
     
-    // 1. Obtener ID del rol 'CLIENTE'
-    $rol_defecto = 'CLIENTE';
-    $sql_rol = "SELECT id_rol FROM roles WHERE nombre_rol = ?";
-    $stmt_rol = $conn->prepare($sql_rol);
-    $stmt_rol->bind_param("s", $rol_defecto);
+    // 1. Obtener Rol Cliente de forma segura
+    $rol_nombre = 'CLIENTE';
+    $stmt_rol = $conn->prepare("SELECT id_rol FROM roles WHERE nombre_rol = ?");
+    $stmt_rol->bind_param("s", $rol_nombre);
     $stmt_rol->execute();
-    $stmt_rol->bind_result($id_rol); 
+    $stmt_rol->bind_result($id_rol);
     $stmt_rol->fetch();
     $stmt_rol->close();
 
-    // Fallback de seguridad si no encuentra el rol
-    if (!$id_rol) $id_rol = 3; 
+    if (!$id_rol) { $id_rol = 3; } // Fallback seguro
 
-    // 2. Capturar datos del formulario
-    $nombre = $conn->real_escape_string($_POST['nombre'] ?? '');
-    $apellido = $conn->real_escape_string($_POST['apellido'] ?? '');
-    $correo = $conn->real_escape_string($_POST['email'] ?? ''); 
-    $password_plana = $_POST['password'] ?? '';
+    // 2. Capturar Inputs con filter_input
+    $nombre   = filter_input(INPUT_POST, 'nombre', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+    $apellido = filter_input(INPUT_POST, 'apellido', FILTER_SANITIZE_FULL_SPECIAL_CHARS);
+    $email    = filter_input(INPUT_POST, 'email', FILTER_SANITIZE_EMAIL);
+    $pass     = filter_input(INPUT_POST, 'password', FILTER_DEFAULT);
     
-    if (empty($nombre) || empty($correo) || empty($password_plana)) {
-        $_SESSION['register_error'] = "Todos los campos son obligatorios.";
-        header("Location: " . $register_page);
-        exit();
+    if (!$nombre || !$email || !$pass) {
+        $_SESSION['register_error'] = "Campos obligatorios vacíos.";
+        header("Location: forms/Register.php");
+        exit(0);
     }
 
-    // 3. Verificar si el correo ya existe
+    // 3. Validar Duplicados
     $stmt_check = $conn->prepare("SELECT id_usuario FROM usuarios WHERE email = ?"); 
-    $stmt_check->bind_param("s", $correo);
+    $stmt_check->bind_param("s", $email);
     $stmt_check->execute();
     $stmt_check->store_result();
 
     if ($stmt_check->num_rows > 0) {
-        $_SESSION['register_error'] = "Este correo ya está registrado.";
+        $_SESSION['register_error'] = "Correo ya registrado.";
         $stmt_check->close();
-        header("Location: " . $register_page);
-        exit();
+        header("Location: forms/Register.php");
+        exit(0);
     }
     $stmt_check->close();
     
-    // 4. Crear usuario
-    $password_hash = password_hash($password_plana, PASSWORD_DEFAULT); 
-    $stmt_insert = $conn->prepare("INSERT INTO usuarios (nombre, apellido, email, password_hash, id_rol) VALUES (?, ?, ?, ?, ?)");
-    $stmt_insert->bind_param("ssssi", $nombre, $apellido, $correo, $password_hash, $id_rol);
+    // 4. Insertar
+    $pass_hash = password_hash($pass, PASSWORD_DEFAULT); 
+    $stmt_ins = $conn->prepare("INSERT INTO usuarios (nombre, apellido, email, password_hash, id_rol) VALUES (?, ?, ?, ?, ?)");
+    $stmt_ins->bind_param("ssssi", $nombre, $apellido, $email, $pass_hash, $id_rol);
 
-    if ($stmt_insert->execute()) {
-        $_SESSION['login_success'] = "¡Cuenta creada! Inicia sesión.";
-        header("Location: " . $login_page);
+    if ($stmt_ins->execute()) {
+        $_SESSION['login_success'] = "Registro exitoso.";
+        header("Location: forms/Login.php");
     } else {
-        $_SESSION['register_error'] = "Error al registrar. Inténtalo de nuevo.";
-        header("Location: " . $register_page);
+        $_SESSION['register_error'] = "Error en el sistema.";
+        header("Location: forms/Register.php");
     }
     
-    $stmt_insert->close();
-    $conn->close();
+    $stmt_ins->close();
 } else {
-    header("Location: " . $register_page);
-    exit();
+    header("Location: forms/Register.php");
+    exit(0);
 }
+$conn->close();
 ?>
