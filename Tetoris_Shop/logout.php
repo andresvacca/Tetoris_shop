@@ -1,11 +1,14 @@
-
 <?php
+/**
+ * logout.php
+ * Cierre de sesión seguro.
+ */
 session_start();
 
-// Destruir todas las variables de sesión
+// Destruir variables
 $_SESSION = array();
 
-// Borrar la cookie de sesión si existe
+// Borrar cookie de sesión
 if (ini_get("session.use_cookies")) {
     $params = session_get_cookie_params();
     setcookie(session_name(), '', time() - 42000,
@@ -14,10 +17,10 @@ if (ini_get("session.use_cookies")) {
     );
 }
 
-// Destruir la sesión completamente
+// Destruir sesión
 session_destroy();
 
-// Redirigir al Login
+// Redirección final
 header("Location: forms/Login.php");
-exit();
+exit(0);
 ?>
